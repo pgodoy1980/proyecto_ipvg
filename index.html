@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asistente Universitario - Matrícula</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/chat.css">
+</head>
+<body>
+
+<div class="chat-container">
+    <header class="chat-header">
+        <div class="chat-header__icon" aria-hidden="true">🎓</div>
+        <div class="chat-header__text">
+            <p class="chat-header__title">Plataforma Institucional de Atención al Estudiante</p>
+            <p class="chat-header__subtitle">Becas, bienestar, prácticas y titulación</p>
+        </div>
+        <div class="chat-header__status">
+            <span class="chat-header__status-dot"></span>
+            En línea
+        </div>
+    </header>
+
+    <div class="config-bar">
+        <label for="numMatricula">N° Matrícula</label>
+        <input type="text" id="numMatricula" value="2024001" placeholder="Ej: 2024001">
+        <span class="config-bar__hint">Ingresa tu matrícula para validar tu estado</span>
+    </div>
+
+    <div class="chat-box" id="chatBox">
+        <div class="message-row message-row--bot">
+            <div class="message-avatar" aria-hidden="true">🤖</div>
+            <div class="message bot">
+                ¡Hola! Soy tu asistente virtual integrado.<br><br>
+                Tengo acceso oficial al <strong>Reglamento de Becas y Apoyo Estudiantil</strong> y al <strong>Reglamento de Prácticas Profesionales y Titulación</strong>.<br><br>
+                Ingresa tu matrícula para validar tu estado y hazme la pregunta que desees.
+            </div>
+        </div>
+    </div>
+
+    <div class="input-area">
+        <div class="input-area__wrapper">
+            <input type="text" id="userInput" placeholder="Pregunta sobre becas, bienestar, prácticas o titulación..." autocomplete="off">
+        </div>
+        <button id="sendBtn" onclick="sendMessage()" aria-label="Enviar mensaje">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+        </button>
+    </div>
+</div>
+
+<script>
+    const inputEl = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+
+    inputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    function appendMessage(content, type, isError = false) {
+        const chatBox = document.getElementById('chatBox');
+        const isUser = type === 'user';
+        const avatar = isUser ? '👤' : '🤖';
+        const errorClass = isError ? ' message--error' : '';
+
+        chatBox.insertAdjacentHTML('beforeend', `
+            <div class="message-row message-row--${type}">
+                <div class="message-avatar" aria-hidden="true">${avatar}</div>
+                <div class="message ${type}${errorClass}">${content}</div>
+            </div>
+        `);
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function showTypingIndicator() {
+        const chatBox = document.getElementById('chatBox');
+        chatBox.insertAdjacentHTML('beforeend', `
+            <div class="typing-indicator" id="typingIndicator">
+                <div class="message-avatar" aria-hidden="true">🤖</div>
+                <div class="typing-bubble">
+                    <span></span><span></span><span></span>
+                </div>
+            </div>
+        `);
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function hideTypingIndicator() {
+        document.getElementById('typingIndicator')?.remove();
+    }
+
+    function formatMarkdown(text) {
+        return text
+            .replace(/\*\*(.*?)\*\//g, '<strong>$1</strong>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\n/g, '<br>')
+            .replace(/^[•*\-]\s+/gm, '• ')
+            .replace(/^\d+\.\s+/gm, '<strong>$&</strong>');
+    }
+
+    async function sendMessage() {
+        const numMatriculaEl = document.getElementById('numMatricula');
+        const chatBox = document.getElementById('chatBox');
+
+        const message = inputEl.value.trim();
+        const matricula = numMatriculaEl.value.trim();
+
+        if (!message || !matricula) return;
+
+        appendMessage(message, 'user');
+        inputEl.value = '';
+        sendBtn.disabled = true;
+
+        showTypingIndicator();
+
+        try {
+            const response = await fetch('http://127.0.0.1:8000/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ numero_matricula: matricula, mensaje: message })
+            });
+
+            const data = await response.json();
+            hideTypingIndicator();
+
+            appendMessage(formatMarkdown(data.respuesta), 'bot');
+        } catch (error) {
+            hideTypingIndicator();
+            appendMessage(
+                'Error: Sin comunicación con el backend de IA. Asegúrate de iniciar app.py.',
+                'bot',
+                true
+            );
+        }
+
+        sendBtn.disabled = false;
+        inputEl.focus();
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+</script>
+</body>
+</html>
