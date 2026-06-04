@@ -26,8 +26,8 @@
     --radius-lg: 20px;
     --radius-full: 9999px;
     --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-    --chat-width: min(820px, 94vw);
-    --chat-height: min(620px, 78vh);
+    --chat-width: min(1280px, 98vw);
+    --chat-height: min(820px, 90vh);
     --transition: 0.2s ease;
 }
 
@@ -45,10 +45,10 @@ body {
         radial-gradient(ellipse at 80% 100%, rgba(0, 51, 102, 0.06) 0%, transparent 50%);
     margin: 0;
     min-height: 100vh;
-    padding: 24px 16px;
+    padding: 16px 12px;
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: stretch;
     color: var(--color-text);
     -webkit-font-smoothing: antialiased;
 }
@@ -209,18 +209,20 @@ body {
 /* ── Filas de mensaje ── */
 .message-row {
     display: flex;
-    gap: 10px;
-    max-width: 88%;
+    gap: 12px;
+    width: 100%;
     animation: message-in 0.3s ease-out;
 }
 
 .message-row--user {
     align-self: flex-end;
     flex-direction: row-reverse;
+    max-width: 72%;
 }
 
 .message-row--bot {
     align-self: flex-start;
+    max-width: 100%;
 }
 
 @keyframes message-in {
@@ -257,11 +259,18 @@ body {
 }
 
 .message {
-    padding: 12px 16px;
+    flex: 1;
+    min-width: 0;
+    padding: 14px 20px;
     border-radius: var(--radius-md);
-    font-size: 14.5px;
-    line-height: 1.55;
+    font-size: 15px;
+    line-height: 1.65;
     word-wrap: break-word;
+    overflow-wrap: anywhere;
+}
+
+.message-row--bot .message {
+    max-width: none;
 }
 
 .message-row--user .message {
@@ -293,9 +302,10 @@ body {
 /* ── Indicador de escritura ── */
 .typing-indicator {
     display: flex;
-    gap: 10px;
+    gap: 12px;
     align-self: flex-start;
-    max-width: 88%;
+    width: 100%;
+    max-width: 100%;
     animation: message-in 0.3s ease-out;
 }
 
@@ -413,10 +423,17 @@ body {
 }
 
 /* ── Responsive ── */
+@media (max-width: 900px) {
+    :root {
+        --chat-width: 100%;
+        --chat-height: min(820px, 92vh);
+    }
+}
+
 @media (max-width: 600px) {
     body {
         padding: 12px 8px;
-        align-items: flex-start;
+        align-items: stretch;
     }
 
     .chat-container {
@@ -440,8 +457,12 @@ body {
         max-width: none;
     }
 
-    .message-row {
-        max-width: 95%;
+    .message-row--user {
+        max-width: 92%;
+    }
+
+    .message-row--bot {
+        max-width: 100%;
     }
 
     .chat-box {

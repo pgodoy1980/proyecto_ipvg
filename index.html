@@ -15,8 +15,8 @@
     <header class="chat-header">
         <div class="chat-header__icon" aria-hidden="true">🎓</div>
         <div class="chat-header__text">
-            <p class="chat-header__title">Plataforma Institucional de Atención al Estudiante</p>
-            <p class="chat-header__subtitle">Becas, bienestar, prácticas y titulación</p>
+            <p class="chat-header__title">Asistente Virtual de Beneficios Estudiantiles</p>
+            <p class="chat-header__subtitle">Consultas sobre becas y estado académico</p>
         </div>
         <div class="chat-header__status">
             <span class="chat-header__status-dot"></span>
@@ -27,23 +27,21 @@
     <div class="config-bar">
         <label for="numMatricula">N° Matrícula</label>
         <input type="text" id="numMatricula" value="2024001" placeholder="Ej: 2024001">
-        <span class="config-bar__hint">Ingresa tu matrícula para validar tu estado</span>
+        <span class="config-bar__hint">Ingresa tu matrícula para consultar tu estado</span>
     </div>
 
     <div class="chat-box" id="chatBox">
         <div class="message-row message-row--bot">
             <div class="message-avatar" aria-hidden="true">🤖</div>
             <div class="message bot">
-                ¡Hola! Soy tu asistente virtual integrado.<br><br>
-                Tengo acceso oficial al <strong>Reglamento de Becas y Apoyo Estudiantil</strong> y al <strong>Reglamento de Prácticas Profesionales y Titulación</strong>.<br><br>
-                Ingresa tu matrícula para validar tu estado y hazme la pregunta que desees.
+                ¡Hola! Soy tu asistente universitario. Puedo analizar el reglamento de becas y comprobar tu estado académico actual con tu número de matrícula. ¿Qué duda tienes hoy?
             </div>
         </div>
     </div>
 
     <div class="input-area">
         <div class="input-area__wrapper">
-            <input type="text" id="userInput" placeholder="Pregunta sobre becas, bienestar, prácticas o titulación..." autocomplete="off">
+            <input type="text" id="userInput" placeholder="Escribe tu consulta aquí..." autocomplete="off">
         </div>
         <button id="sendBtn" onclick="sendMessage()" aria-label="Enviar mensaje">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -99,11 +97,9 @@
 
     function formatMarkdown(text) {
         return text
-            .replace(/\*\*(.*?)\*\//g, '<strong>$1</strong>')
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\n/g, '<br>')
-            .replace(/^[•*\-]\s+/gm, '• ')
-            .replace(/^\d+\.\s+/gm, '<strong>$&</strong>');
+            .replace(/\* /g, '• ');
     }
 
     async function sendMessage() {
@@ -135,7 +131,7 @@
         } catch (error) {
             hideTypingIndicator();
             appendMessage(
-                'Error: Sin comunicación con el backend de IA. Asegúrate de iniciar app.py.',
+                'Error: No se pudo conectar con el servidor backend. Asegúrate de ejecutar app.py.',
                 'bot',
                 true
             );

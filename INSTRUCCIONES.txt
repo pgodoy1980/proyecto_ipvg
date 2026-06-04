@@ -1,49 +1,19 @@
 ===================================================================
-MANUAL DE DESPLIEGUE LOCAL - CHATBOT MULTI-RAG CON SQLITE
+INSTRUCCIONES DE EJECUCIÓN - CHATBOT UNIVERSITARIO (VERSION GROQ + .ENV)
 ===================================================================
 
-Este proyecto consta de una arquitectura desacoplada basada en micro-servicios, 
-con persistencia relacional en SQLite3 y extracción de conocimiento dinámico (RAG).
-
--------------------------------------------------------------------
-PASO 1: PREPARACIÓN DEL DIRECTORIO Y ARCHIVOS CONFIDENCIALES
--------------------------------------------------------------------
-1. Asegúrate de tener los siguientes archivos en la misma carpeta raíz:
-   - css                         (archivo chat.css)
-   - app.py                      (Servidor FastAPI)
-   - init_db.py                  (Script creador de la Base de Datos)
-   - index.html                  (Interfaz de Usuario)
-   - base_conocimiento_becas.pdf  (PDF N°1)
-   - base_conocimiento_practica_titulacion.pdf (PDF N°2)
-
-2. Crea un archivo de texto llamado '.env' e inserta tu credencial privada:
-   GROQ_API_KEY=tu_gsk_token_real_aqui
-
--------------------------------------------------------------------
-PASO 2: INSTALACIÓN DE DEPENDENCIAS EN EL SISTEMA
--------------------------------------------------------------------
-Abre la terminal de comandos posicionada en la carpeta del proyecto y ejecuta:
+1. Instalar las dependencias del proyecto:
    pip install -r requirements.txt
 
-*Nota: SQLite3 no requiere instalación, viene integrado nativamente en Python.*
+2. Configurar la clave de la API en el archivo de entorno:
+   - Verás un archivo llamado '.env.example'.
+   - Renómbralo a '.env' (o crea un archivo nuevo llamado '.env').
+   - Abre el archivo '.env' y cambia 'gsk_tu_clave_aqui_...' por tu API Key real de Groq.
+   
+   *Nota: El archivo '.env' se lee automáticamente por el backend en Python.*
 
--------------------------------------------------------------------
-PASO 3: CARGA Y LEVANTAMIENTO DE LA BASE DE DATOS LOCAL
--------------------------------------------------------------------
-Para generar de forma automatizada las tablas relacionales y registros, ejecuta:
-   python init_db.py
-
-Verás los mensajes de confirmación en la consola. Al finalizar, notarás que 
-se creó un archivo físico binario llamado 'universidad.db' en el directorio. 
-¡Tu base de datos local está montada y lista!
-
--------------------------------------------------------------------
-PASO 4: INICIO DEL SISTEMA
--------------------------------------------------------------------
-1. Lanza el backend ejecutor de la IA ejecutando en la terminal:
+3. Ejecutar el servidor Backend:
    python app.py
 
-2. Haz doble clic sobre el archivo 'index.html' para abrir la interfaz gráfica.
-3. Utiliza la matrícula de pruebas '2024001' (Juan Pérez) o '2024002' (María López) 
-   para interactuar con el Agente Inteligente.
-===================================================================
+4. Abrir el Frontend:
+   Simplemente haz doble clic en el archivo 'index.html' para abrirlo en tu navegador.
