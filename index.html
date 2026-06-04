@@ -53,93 +53,95 @@
 </div>
 
 <script>
+    const API_CHAT = 'http://127.0.0.1:8000/api/chat';
+    const chatBox = document.getElementById('chatBox');
     const inputEl = document.getElementById('userInput');
     const sendBtn = document.getElementById('sendBtn');
+    const matriculaEl = document.getElementById('numMatricula');
+    const ICONOS_FUENTE = { rag: '📄', tool: '🔧', ninguna: 'ℹ️' };
 
     inputEl.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-        }
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     });
 
-    function appendMessage(content, type, isError = false) {
-        const chatBox = document.getElementById('chatBox');
-        const isUser = type === 'user';
-        const avatar = isUser ? '👤' : '🤖';
-        const errorClass = isError ? ' message--error' : '';
+    const scrollBottom = () => { chatBox.scrollTop = chatBox.scrollHeight; };
 
+    const formatMarkdown = (text) => text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n/g, '<br>')
+        .replace(/\* /g, '• ');
+
+    const renderFuentes = (fuentes) => {
+        if (!fuentes?.length) return '';
+        const items = fuentes.map((f) => `
+            <li class="message-sources__item message-sources__item--${f.tipo}">
+                <span class="message-sources__icon">${ICONOS_FUENTE[f.tipo] || 'ℹ️'}</span>
+                <span class="message-sources__body">
+                    <strong>${f.titulo}</strong>
+                    <span class="message-sources__detail">${f.detalle}</span>
+                    ${f.archivo ? `<span class="message-sources__file">${f.archivo}</span>` : ''}
+                    ${f.paginas?.length ? `<span class="message-sources__pages">Páginas: ${f.paginas.join(', ')}</span>` : ''}
+                </span>
+            </li>`).join('');
+        return `<div class="message-sources" role="note">
+            <p class="message-sources__title">Fuentes de la respuesta</p>
+            <ul class="message-sources__list">${items}</ul></div>`;
+    };
+
+    const appendMessage = (content, type, isError = false, fuentes = null) => {
+        const isUser = type === 'user';
         chatBox.insertAdjacentHTML('beforeend', `
             <div class="message-row message-row--${type}">
-                <div class="message-avatar" aria-hidden="true">${avatar}</div>
-                <div class="message ${type}${errorClass}">${content}</div>
-            </div>
-        `);
-        chatBox.scrollTop = chatBox.scrollHeight;
-    }
+                <div class="message-avatar">${isUser ? '👤' : '🤖'}</div>
+                <div class="message-wrap">
+                    <div class="message ${type}${isError ? ' message--error' : ''}">${content}</div>
+                    ${type === 'bot' ? renderFuentes(fuentes) : ''}
+                </div>
+            </div>`);
+        scrollBottom();
+    };
 
-    function showTypingIndicator() {
-        const chatBox = document.getElementById('chatBox');
+    const setTyping = (show) => {
+        document.getElementById('typingIndicator')?.remove();
+        if (!show) return;
         chatBox.insertAdjacentHTML('beforeend', `
             <div class="typing-indicator" id="typingIndicator">
-                <div class="message-avatar" aria-hidden="true">🤖</div>
-                <div class="typing-bubble">
-                    <span></span><span></span><span></span>
-                </div>
-            </div>
-        `);
-        chatBox.scrollTop = chatBox.scrollHeight;
-    }
-
-    function hideTypingIndicator() {
-        document.getElementById('typingIndicator')?.remove();
-    }
-
-    function formatMarkdown(text) {
-        return text
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\n/g, '<br>')
-            .replace(/\* /g, '• ');
-    }
+                <div class="message-avatar">🤖</div>
+                <div class="typing-bubble"><span></span><span></span><span></span></div>
+            </div>`);
+        scrollBottom();
+    };
 
     async function sendMessage() {
-        const numMatriculaEl = document.getElementById('numMatricula');
-        const chatBox = document.getElementById('chatBox');
+        const mensaje = inputEl.value.trim();
+        const matricula = matriculaEl.value.trim();
+        if (!mensaje || !matricula) return;
 
-        const message = inputEl.value.trim();
-        const matricula = numMatriculaEl.value.trim();
-
-        if (!message || !matricula) return;
-
-        appendMessage(message, 'user');
+        appendMessage(mensaje, 'user');
         inputEl.value = '';
         sendBtn.disabled = true;
-
-        showTypingIndicator();
+        setTyping(true);
 
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/chat', {
+            const res = await fetch(API_CHAT, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ numero_matricula: matricula, mensaje: message })
+                body: JSON.stringify({ numero_matricula: matricula, mensaje }),
             });
-
-            const data = await response.json();
-            hideTypingIndicator();
-
-            appendMessage(formatMarkdown(data.respuesta), 'bot');
-        } catch (error) {
-            hideTypingIndicator();
+            const data = await res.json();
+            setTyping(false);
+            appendMessage(formatMarkdown(data.respuesta), 'bot', false, data.fuentes);
+        } catch {
+            setTyping(false);
             appendMessage(
-                'Error: No se pudo conectar con el servidor backend. Asegúrate de ejecutar app.py.',
-                'bot',
-                true
+                'Error: No se pudo conectar con el backend. Ejecuta python app.py.',
+                'bot', true
             );
         }
 
         sendBtn.disabled = false;
         inputEl.focus();
-        chatBox.scrollTop = chatBox.scrollHeight;
+        scrollBottom();
     }
 </script>
 </body>

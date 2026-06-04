@@ -280,12 +280,99 @@ body {
     box-shadow: var(--shadow-sm);
 }
 
+.message-wrap {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
 .message-row--bot .message {
     background: var(--color-bot-bubble);
     color: var(--color-text);
     border: 1px solid var(--color-border);
     border-bottom-left-radius: 4px;
     box-shadow: var(--shadow-sm);
+}
+
+/* ── Fuentes de la respuesta ── */
+.message-sources {
+    background: #f0f6fc;
+    border: 1px solid #c7d9ed;
+    border-left: 3px solid var(--color-accent);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+
+.message-sources__title {
+    margin: 0 0 8px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-primary);
+}
+
+.message-sources__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.message-sources__item {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.message-sources__icon {
+    flex-shrink: 0;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.message-sources__body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.message-sources__body strong {
+    font-size: 12.5px;
+    color: var(--color-primary-dark);
+}
+
+.message-sources__detail,
+.message-sources__file,
+.message-sources__pages {
+    color: var(--color-text-muted);
+    font-size: 12px;
+}
+
+.message-sources__file::before {
+    content: 'Archivo: ';
+}
+
+.message-sources__pages {
+    font-weight: 500;
+    color: var(--color-primary-light);
+}
+
+.message-sources__item--ninguna {
+    opacity: 0.95;
+}
+
+.message-sources:has(.message-sources__item--ninguna) {
+    background: #f8fafc;
+    border-color: var(--color-border);
+    border-left-color: var(--color-text-muted);
 }
 
 .message strong {
