@@ -1,3 +1,14 @@
+"""
+Chatbot Universitario · RAG + Tools (function calling)
+======================================================
+Flujo:
+  1) Prompt + definición de tools + reglamento PDF (RAG)
+  2) El modelo responde con tool_calls si necesita datos del alumno
+  3) Python ejecuta la función real y devuelve el resultado
+  4) El modelo redacta la respuesta final cruzando tool + reglamento
+"""
+
+import json
 import os
 import re
 from fastapi import FastAPI
@@ -27,19 +38,15 @@ MSG_SIN_REGLAMENTO = (
 )
 
 DB_ALUMNOS = {
-    "2024001": {"nombre": "Juan Pérez", "gpa": 5.4, "reprobados": 1, "decil": 3},
-    "2024002": {"nombre": "María López", "gpa": 4.9, "reprobados": 2, "decil": 2},
+    "2024001": {"nombre": "Juan Pérez", "gpa": 5.4, "reprobadas": 1, "decil": 3},
+    "2024002": {"nombre": "María López", "gpa": 4.9, "reprobadas": 2, "decil": 2},
 }
 
 ORIGENES_CORS_DEFECTO = [
-    "http://127.0.0.1",
-    "http://localhost",
-    "http://127.0.0.1:8000",
-    "http://localhost:8000",
-    "http://127.0.0.1:8080",
-    "http://localhost:8080",
-    "http://127.0.0.1:5500",
-    "http://localhost:5500",
+    "http://127.0.0.1", "http://localhost",
+    "http://127.0.0.1:8000", "http://localhost:8000",
+    "http://127.0.0.1:8080", "http://localhost:8080",
+    "http://127.0.0.1:5500", "http://localhost:5500",
 ]
 REGEX_CORS_LOCAL = r"http://(127\.0\.0\.1|localhost)(:\d+)?"
 
@@ -49,16 +56,16 @@ KW_REGLAMENTO = (
     "tutor", "bienestar", "subsidio", "cobertura", "renovación", "renovacion",
     "ubsm", "ptap",
 )
-KW_FUERA_ALCANCE = (
-    "deporte", "deportes", "biblioteca", "intercambio", "vacacion", "vacaciones",
-    "estacionamiento", "gimnasio", "horario de atención del departamento",
-)
-KW_EXPEDIENTE = (
+KW_HISTORIAL = (
     "mi gpa", "mi promedio", "mis notas", "mi decil", "mi historial",
     "mi estado académico", "mi estado academico", "mi rendimiento",
     "mi situación académica", "mi situacion academica", "mis reprobad",
     "cumplo los", "cumplo con", "puedo postular", "podría postular",
     "según mi gpa", "con mi gpa", "con mi promedio", "con mi decil",
+)
+KW_FUERA_ALCANCE = (
+    "deporte", "deportes", "biblioteca", "intercambio", "vacacion", "vacaciones",
+    "estacionamiento", "gimnasio", "horario de atención del departamento",
 )
 KW_RESPUESTA_SIN_DATO = (
     "no encontré esa información en el reglamento",
@@ -69,13 +76,66 @@ client = Groq(api_key=GROQ_API_KEY)
 TEXTO_PDF: str = ""
 
 
+# ======================================================================
+# 1. Funciones reales (las ejecuta tu código, no el modelo)
+# ======================================================================
+def tool_consultar_historial(numero_matricula: str) -> dict:
+    """Consulta el historial académico del alumno en el sistema universitario."""
+    alumno = DB_ALUMNOS.get(numero_matricula)
+    if not alumno:
+        return {"error": MSG_SIN_MATRICULA}
+    reprobadas = alumno["reprobadas"]
+    return {
+        "numero_matricula": numero_matricula,
+        "nombre": alumno["nombre"],
+        "gpa": alumno["gpa"],
+        "reprobadas": reprobadas,
+        "decil": alumno["decil"],
+        "cumple_renovacion_reprobadas": reprobadas <= 1,
+    }
+
+
+DISPATCH = {
+    "tool_consultar_historial": tool_consultar_historial,
+}
+
+
+# ======================================================================
+# 2. Definición de tools (esto es lo que el modelo "ve")
+# ======================================================================
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "tool_consultar_historial",
+            "description": (
+                "Obtiene el historial académico del estudiante: nombre, GPA, "
+                "asignaturas reprobadas en el semestre anterior y decil socioeconómico. "
+                "Usar cuando la consulta requiera datos personales o evaluar postulación/renovación."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "numero_matricula": {
+                        "type": "string",
+                        "description": "Número de matrícula del estudiante",
+                    }
+                },
+                "required": ["numero_matricula"],
+            },
+        },
+    },
+]
+
+
+# ======================================================================
+# 3. RAG, utilidades y fuentes
+# ======================================================================
 def _contiene(texto: str, *palabras: str) -> bool:
-    t = texto.lower()
-    return any(p in t for p in palabras)
+    return any(p in texto.lower() for p in palabras)
 
 
 def configuracion_cors() -> dict:
-    """CORS: lista explícita en .env o, por defecto, orígenes locales + regex de puertos."""
     raw = os.getenv("ALLOWED_ORIGINS", "").strip()
     base = {
         "allow_credentials": True,
@@ -115,15 +175,17 @@ def cargar_pdf() -> str:
     return TEXTO_PDF
 
 
-def clasificar_consulta(mensaje: str) -> dict:
+def requiere_historial(mensaje: str) -> bool:
     m = mensaje.lower()
-    personal = _contiene(m, *KW_EXPEDIENTE) or (
+    return _contiene(m, *KW_HISTORIAL) or (
         "renov" in m and _contiene(m, "cumplo", "mi rendimiento", "mi promedio", "mi gpa")
     )
+
+
+def clasificar_consulta(mensaje: str) -> dict:
     return {
-        "personal": personal,
-        "reglamento": _contiene(m, *KW_REGLAMENTO),
-        "fuera_alcance": _contiene(m, *KW_FUERA_ALCANCE),
+        "reglamento": _contiene(mensaje, *KW_REGLAMENTO),
+        "fuera_alcance": _contiene(mensaje, *KW_FUERA_ALCANCE),
     }
 
 
@@ -131,13 +193,15 @@ def extraer_paginas_citadas(texto: str) -> list[str]:
     return sorted(set(re.findall(r"P[aá]gina\s+(\d+)", texto, re.I)), key=int)
 
 
-def construir_fuentes(mensaje: str, matricula: str, respuesta: str) -> list[dict]:
+def construir_fuentes(
+    mensaje: str, matricula: str, respuesta: str, tools_usadas: list[str]
+) -> list[dict]:
     c = clasificar_consulta(mensaje)
     sin_dato = _contiene(respuesta, *KW_RESPUESTA_SIN_DATO)
     paginas = extraer_paginas_citadas(respuesta)
     fuentes = []
 
-    if c["personal"]:
+    if "tool_consultar_historial" in tools_usadas:
         fuentes.append({
             "tipo": "tool",
             "titulo": "Datos académicos en tiempo real",
@@ -172,43 +236,116 @@ def construir_fuentes(mensaje: str, matricula: str, respuesta: str) -> list[dict
     return fuentes
 
 
-def construir_system_prompt(alumno: dict, matricula: str, mensaje: str, texto_pdf: str) -> str:
-    nombre = alumno["nombre"].split()[0]
-    usa_tool = clasificar_consulta(mensaje)["personal"]
-
-    if usa_tool:
-        bloque_alumno = f"""
-    2. Usa los datos de tool_consultar_historial:
-    --- DATOS DEL ALUMNO ---
-    Nombre: {alumno['nombre']} | Matrícula: {matricula}
-    GPA: {alumno['gpa']} | Reprobadas: {alumno['reprobados']} | Decil: {alumno['decil']}
-    --- FIN DATOS ---"""
-        regla_datos = (
-            "4. Si usas datos personales, indica que provienen del sistema académico."
-        )
-    else:
-        bloque_alumno = (
-            "\n    2. NO uses expediente (GPA, decil, reprobadas). Solo el reglamento PDF."
-        )
-        regla_datos = "4. No cites ni inventes datos del expediente académico."
-
+# ======================================================================
+# 4. Conversación (function calling)
+# ======================================================================
+def construir_system_prompt(nombre_pila: str, matricula: str, texto_pdf: str) -> str:
     return f"""Eres asistente universitario del {NOMBRE_REGLAMENTO}.
-Saluda a {nombre} por su nombre de pila.
+Saluda a {nombre_pila} por su nombre de pila.
 
 Reglas:
 1. Reglamento oficial:
 --- PDF ---
 {texto_pdf}
 --- FIN PDF ---
-{bloque_alumno}
-3. Cita la página del PDF cuando corresponda (ej: **Página 2**).
-{regla_datos}
+2. Usa tool_consultar_historial SOLO si necesitas GPA, reprobadas o decil del alumno
+   (postulación, renovación o elegibilidad personalizada). Preguntas generales del
+   reglamento (plazos, requisitos, apelación, documentación) se responden solo con el PDF.
+3. En postulación o renovación de BAI/BAU, aplica **Página 2**: máximo 1 reprobada.
+   Si reprobadas >= 2, concluye que NO puede postular ni mantener el beneficio.
+   Menciona reprobadas, GPA y decil. No digas que no tienes acceso si ya usaste la tool.
+4. Cita la página del PDF (ej: **Página 2**).
 5. Si no está en el PDF, responde exactamente: "{MSG_SIN_REGLAMENTO}"
-6. Español formal y cercano. Markdown: **negritas**, listas con *, párrafos separados.
-No incluyas sección "Fuentes consultadas" (la muestra la interfaz)."""
+6. Español formal. Markdown: **negritas**, listas con *.
+No incluyas sección "Fuentes consultadas"."""
 
 
-# --- API ---
+def _mensaje_asistente(message) -> dict:
+    """Convierte la respuesta del modelo (con tool_calls) al formato del historial."""
+    msg = {"role": "assistant", "content": message.content}
+    if message.tool_calls:
+        msg["tool_calls"] = [
+            {
+                "id": tc.id,
+                "type": "function",
+                "function": {
+                    "name": tc.function.name,
+                    "arguments": tc.function.arguments,
+                },
+            }
+            for tc in message.tool_calls
+        ]
+    return msg
+
+
+def ejecutar_tool_calls(mensajes: list, tool_calls, matricula: str) -> list[str]:
+    """Ejecuta cada tool_call y agrega los resultados al historial."""
+    tools_usadas: list[str] = []
+    for tc in tool_calls:
+        nombre = tc.function.name
+        args = json.loads(tc.function.arguments)
+        if nombre == "tool_consultar_historial":
+            args["numero_matricula"] = matricula  # seguridad: matrícula de la sesión
+
+        fn = DISPATCH.get(nombre)
+        resultado = fn(**args) if fn else {"error": f"Tool desconocida: {nombre}"}
+        if nombre in DISPATCH:
+            tools_usadas.append(nombre)
+
+        mensajes.append({
+            "role": "tool",
+            "tool_call_id": tc.id,
+            "content": json.dumps(resultado, ensure_ascii=False),
+        })
+    return tools_usadas
+
+
+def generar_respuesta(
+    matricula: str, mensaje: str, nombre_pila: str, texto_pdf: str
+) -> tuple[str, list[str]]:
+    mensajes = [
+        {"role": "system", "content": construir_system_prompt(nombre_pila, matricula, texto_pdf)},
+        {"role": "user", "content": mensaje},
+    ]
+
+    # --- Solo RAG: sin tools disponibles ---
+    if not requiere_historial(mensaje):
+        respuesta = client.chat.completions.create(
+            model=MODELO_LLM,
+            messages=mensajes,
+            temperature=0.2,
+        )
+        return respuesta.choices[0].message.content or "", []
+
+    # --- Con historial: primera llamada obliga la tool ---
+    primera = client.chat.completions.create(
+        model=MODELO_LLM,
+        messages=mensajes,
+        tools=TOOLS,
+        tool_choice={"type": "function", "function": {"name": "tool_consultar_historial"}},
+        temperature=0.2,
+    )
+    mensaje_modelo = primera.choices[0].message
+    mensajes.append(_mensaje_asistente(mensaje_modelo))
+
+    if not mensaje_modelo.tool_calls:
+        return mensaje_modelo.content or "", []
+
+    # --- Ejecutar tools y devolver resultados al modelo ---
+    tools_usadas = ejecutar_tool_calls(mensajes, mensaje_modelo.tool_calls, matricula)
+
+    # --- Segunda llamada: respuesta final con datos de la tool ---
+    final = client.chat.completions.create(
+        model=MODELO_LLM,
+        messages=mensajes,
+        temperature=0.2,
+    )
+    return final.choices[0].message.content or "", tools_usadas
+
+
+# ======================================================================
+# 5. API
+# ======================================================================
 app = FastAPI(title="Chatbot Universitario")
 app.add_middleware(CORSMiddleware, **configuracion_cors())
 
@@ -220,30 +357,22 @@ class ChatRequest(BaseModel):
 
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest):
-    texto_pdf = cargar_pdf()
     alumno = DB_ALUMNOS.get(req.numero_matricula)
-
     if not alumno:
         return {"respuesta": MSG_SIN_MATRICULA, "fuentes": []}
 
     try:
-        completion = client.chat.completions.create(
-            model=MODELO_LLM,
-            messages=[
-                {
-                    "role": "system",
-                    "content": construir_system_prompt(
-                        alumno, req.numero_matricula, req.mensaje, texto_pdf
-                    ),
-                },
-                {"role": "user", "content": req.mensaje},
-            ],
-            temperature=0.2,
+        respuesta, tools_usadas = generar_respuesta(
+            req.numero_matricula,
+            req.mensaje,
+            alumno["nombre"].split()[0],
+            cargar_pdf(),
         )
-        respuesta = completion.choices[0].message.content
         return {
             "respuesta": respuesta,
-            "fuentes": construir_fuentes(req.mensaje, req.numero_matricula, respuesta),
+            "fuentes": construir_fuentes(
+                req.mensaje, req.numero_matricula, respuesta, tools_usadas
+            ),
         }
     except Exception as e:
         return {
@@ -252,7 +381,6 @@ async def chat_endpoint(req: ChatRequest):
         }
 
 
-# Carga del PDF al importar el módulo
 TEXTO_PDF = extraer_texto_pdf(ARCHIVO_PDF)
 
 if __name__ == "__main__":
